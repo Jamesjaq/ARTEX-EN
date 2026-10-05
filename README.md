@@ -11,6 +11,28 @@ AI-driven autonomous penetration testing system (Go backend + Next.js frontend)
 
 ---
 
+## About this fork
+
+This is an **English translation** of [Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX). All Chinese
+text — the UI, the Go backend, the LLM prompts, the comments, the scripts and the documentation — has
+been translated; the behaviour is unchanged. Licensing, copyright and the author's terms of use are
+inherited unchanged from upstream (see [License and disclaimer](#license-and-disclaimer)).
+
+> ⚠️ **The published Docker image is the upstream Chinese build.** `autumn27/artex` is built by
+> upstream's CI and has nothing to do with this translation, so `docker compose up -d` and the
+> prebuilt [Releases](https://github.com/Autumn-27/ARTEX/releases) archives will all give you the
+> **Chinese** interface. To run the English build you must **build from source**:
+> [Build on Windows](#option-4-build-on-windows) · [build a single binary](#option-5-build-a-single-binary-from-source-linux--macos) ·
+> [build your own Docker image](#option-6-build-your-own-docker-image-english).
+
+A few Chinese strings are kept deliberately, each with a comment explaining why — ICP filing numbers
+and their detection, the legacy `[模型]` reason prefix (matched alongside the new `[model]` so rows
+written by an older database still classify correctly), the quota-exhausted markers Chinese LLM
+gateways return, the full-width comma in `split()` character classes, and the test fixtures whose
+whole purpose is to prove non-ASCII/GBK handling.
+
+---
+
 ## Screenshots
 
 > For the full interactive experience, see the [live demo](https://artex-demo.vercel.app/).
@@ -66,6 +88,11 @@ Asset data can be synced straight from [ScopeSentry](https://github.com/Autumn-2
 
 > Requires a **PostgreSQL** database; exploration requires an **LLM** (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, which can also be configured in the UI).
 
+> ⚠️ **Options 1-3 install the upstream Chinese build.** They pull the `autumn27/artex` image or a
+> Releases archive, neither of which contains this translation. For the English build use
+> **[Option 4 (Windows)](#option-4-build-on-windows)**, **[Option 5 (Linux/macOS)](#option-5-build-a-single-binary-from-source-linux--macos)**
+> or **[Option 6 (your own Docker image)](#option-6-build-your-own-docker-image-english)**.
+
 ### Option 1: one-click install script (recommended)
 
 ```bash
@@ -107,7 +134,67 @@ cp config.example.json config.json   # fill in the database connection
 > Start with `start.sh` / `start.bat` rather than running `./artex` directly. It is a supervisor script: when the program exits, the exit code decides whether it is restarted, and **the [one-click update](#option-1-one-click-update-from-the-ui-recommended) in the UI relies on it to swap the binary**. If you run `./artex` directly, nothing restarts it after an update.
 > To keep it running in the background: `nohup ./start.sh >artex.log 2>&1 &`.
 
-### Option 4: build a single binary from source
+### Option 4: build on Windows
+
+Produces a native `artex.exe` with the English frontend embedded. Requires **Go >= 1.26.3**,
+**Node >= 20**, **PostgreSQL** and **Git Bash** (shipped with Git for Windows).
+
+**In Git Bash:**
+
+```bash
+# 1) static export of the frontend  (~3-4 min)
+cd web && npm ci && npm run build:static && cd ..
+# 2) copy it into the embed directory
+mkdir -p server/webui && rm -rf server/webui/dist
+cp -r web/out server/webui/dist
+# 3) build  (~1 min, ~50 MB)
+CGO_ENABLED=0 go build -tags embedui -o artex.exe ./cmd/artex
+```
+
+**In PowerShell**, `npm run build:static` fails: the script is `NEXT_EXPORT=1 next build`, which is
+Unix env-var syntax. Set the variable separately instead:
+
+```powershell
+cd web
+npm ci
+$env:NEXT_EXPORT="1"; npx next build
+cd ..
+
+New-Item -ItemType Directory -Force server\webui | Out-Null
+Remove-Item -Recurse -Force server\webui\dist -ErrorAction SilentlyContinue
+Copy-Item -Recurse web\out server\webui\dist
+
+$env:CGO_ENABLED="0"
+go build -tags embedui -o artex.exe .\cmd\artex
+```
+
+Then start a database, point `config.json` at it and run `start.bat`:
+
+```bash
+docker run -d --name artex-pg -p 5433:5432 \
+  -e POSTGRES_USER=artex -e POSTGRES_PASSWORD=yourpass -e POSTGRES_DB=artex \
+  -v artex-pgdata:/var/lib/postgresql/data postgres:16-alpine
+
+cp config.example.json config.json   # fill in the password
+```
+
+```cmd
+start.bat
+```
+
+-> **http://localhost:8787** (the first visit goes to `/setup` to set the admin password).
+
+> `config.example.json` defaults to port **5433**, which is why the `docker run` above maps 5433. Change
+> one or the other if your database listens on 5432. `ARTEX_PG_DSN` overrides the file entirely.
+>
+> Run `start.bat`, not `artex.exe` directly: it is the supervisor the one-click update relies on to
+> restart the process and swap the binary. Extra flags pass straight through, e.g. `start.bat -addr :9000`.
+>
+> A native Windows build has **no bundled recon toolchain** (no nmap, no Playwright/chromium, no
+> dnsutils) — the agent only gets whatever is already on your `PATH`. For the full toolchain, use
+> Option 6 instead.
+
+### Option 5: build a single binary from source (Linux / macOS)
 
 ```bash
 # 1) static export of the frontend
@@ -119,7 +206,40 @@ CGO_ENABLED=0 go build -tags embedui -o artex ./cmd/artex
 ./start.sh
 ```
 
-### Option 5: build cross-platform release archives
+> `server/webui/dist` must exist **before** the Go build: `//go:embed all:webui/dist` fails at compile
+> time when it is missing. Without `-tags embedui` the binary builds fine but serves
+> *"the frontend is not embedded in this binary"* instead of the UI.
+
+### Option 6: build your own Docker image (English)
+
+Keeps the image's recon toolchain (nmap, Playwright + chromium, dnsutils, ...) while running this
+translation. The Dockerfile expects a prebuilt **Linux** binary at `dist/<arch>/artex`, so
+cross-compile it first (this works from Git Bash on Windows too):
+
+```bash
+cd web && npm ci && npm run build:static && cd ..
+cp -r web/out server/webui/dist
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags embedui -o dist/amd64/artex ./cmd/artex
+docker build -t artex-en:latest .
+```
+
+Then point `docker-compose.yml` at your image and bring it up:
+
+```yaml
+  artex:
+    image: artex-en:latest        # instead of autumn27/artex:${ARTEX_TAG:-latest}
+```
+
+```bash
+cp .env.example .env              # set POSTGRES_PASSWORD
+docker compose up -d
+```
+
+> Because the image is local, `docker compose pull` no longer applies — rebuild it to upgrade. The
+> one-click update in the UI also does not apply: it downloads upstream's release binary, which is the
+> Chinese build.
+
+### Option 7: build cross-platform release archives
 
 `build.sh` builds and embeds the frontend, strips debug information via the Go linker, and zips the release files. In release mode it produces zips for Linux amd64/arm64, macOS amd64/arm64 and Windows amd64 by default:
 
@@ -195,6 +315,19 @@ cp -r web/out server/webui/dist
 CGO_ENABLED=0 go build -tags embedui -o artex ./cmd/artex
 # restart ./start.sh
 ```
+
+On Windows, rebuild `artex.exe` the same way and restart `start.bat`:
+
+```bash
+git pull
+cd web && npm ci && npm run build:static && cd ..
+rm -rf server/webui/dist && cp -r web/out server/webui/dist
+CGO_ENABLED=0 go build -tags embedui -o artex.exe ./cmd/artex
+```
+
+> Rebuilding from source is the **only** upgrade path for this translation. The one-click update in
+> the UI, `update.sh` and `docker compose pull` all fetch upstream's artifacts, which are the Chinese
+> build — using them would silently replace your English binary.
 
 ---
 

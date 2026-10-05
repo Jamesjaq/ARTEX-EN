@@ -34,14 +34,19 @@ Thumbs.db
 # claude code local state
 .claude/
 
-# Single-binary artifact with the frontend embedded
+# Single-binary artifact with the frontend embedded (artex.exe on Windows)
 /artex
+/artex.exe
 # Intermediates the one-click update leaves next to the executable (staged file / backup / failed version / upgrade marker)
 /artex.new
 /artex.new.sha256
 /artex.old
 /artex.failed
 /artex.upgrade.json
+/artex.exe.new
+/artex.exe.new.sha256
+/artex.exe.old
+/artex.exe.failed
 /server/webui/dist/
 /dist/
 
