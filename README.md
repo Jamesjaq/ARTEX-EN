@@ -23,7 +23,7 @@ inherited unchanged from upstream (see [License and disclaimer](#license-and-dis
 > prebuilt [Releases](https://github.com/Autumn-27/ARTEX/releases) archives will all give you the
 > **Chinese** interface. To run the English build you must **build from source**:
 > [Build on Windows](#option-4-build-on-windows) · [build a single binary](#option-5-build-a-single-binary-from-source-linux--macos) ·
-> [build your own Docker image](#option-6-build-your-own-docker-image-english).
+> [build your own Docker image](#option-6-build-your-own-docker-image-english) (**[full guide: DOCKER.md](DOCKER.md)**).
 
 A few Chinese strings are kept deliberately, each with a comment explaining why — ICP filing numbers
 and their detection, the legacy `[模型]` reason prefix (matched alongside the new `[model]` so rows
@@ -212,32 +212,30 @@ CGO_ENABLED=0 go build -tags embedui -o artex ./cmd/artex
 
 ### Option 6: build your own Docker image (English)
 
-Keeps the image's recon toolchain (nmap, Playwright + chromium, dnsutils, ...) while running this
-translation. The Dockerfile expects a prebuilt **Linux** binary at `dist/<arch>/artex`, so
-cross-compile it first (this works from Git Bash on Windows too):
+**Recommended for this fork.** Unlike a native binary it keeps the image's recon toolchain (nmap,
+Playwright + chromium, dnsutils, whois, ...), which is what the agents reach for through `Bash`.
+
+The Dockerfile compiles nothing — it copies in a **Linux** binary you build first, so cross-compile
+it before `docker build` (this works from Git Bash on Windows too):
 
 ```bash
 cd web && npm ci && npm run build:static && cd ..
-cp -r web/out server/webui/dist
+rm -rf server/webui/dist && cp -r web/out server/webui/dist
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags embedui -o dist/amd64/artex ./cmd/artex
 docker build -t artex-en:latest .
 ```
 
-Then point `docker-compose.yml` at your image and bring it up:
-
-```yaml
-  artex:
-    image: artex-en:latest        # instead of autumn27/artex:${ARTEX_TAG:-latest}
-```
+Then point compose at your image and bring it up:
 
 ```bash
+cp docker-compose.override.yml.example docker-compose.override.yml
 cp .env.example .env              # set POSTGRES_PASSWORD
 docker compose up -d
 ```
 
-> Because the image is local, `docker compose pull` no longer applies — rebuild it to upgrade. The
-> one-click update in the UI also does not apply: it downloads upstream's release binary, which is the
-> Chinese build.
+> 📖 **[DOCKER.md](DOCKER.md)** covers this in full: how the build fits together, arm64 and multi-arch
+> with buildx, upgrading, what ships in the image, and the common errors
+> (`exec format error`, `pattern all:webui/dist: no matching files found`, a still-Chinese UI).
 
 ### Option 7: build cross-platform release archives
 
